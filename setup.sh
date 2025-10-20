@@ -266,11 +266,12 @@ if [ "$BONUS_SETUP" = true ]; then
 
     echo "Creating WordPress database and user for '$USERNAME'..."
     mariadb <<EOF
+DROP USER IF EXISTS '${USERNAME}'@'localhost';
+DROP DATABASE IF EXISTS ${USERNAME}_db;
 CREATE DATABASE ${USERNAME}_db;
 CREATE USER '${USERNAME}'@'localhost' IDENTIFIED BY '${DB_PASS}';
 GRANT ALL PRIVILEGES ON ${USERNAME}_db.* TO '${USERNAME}'@'localhost';
 FLUSH PRIVILEGES;
-EXIT;
 EOF
 
     echo "Database '${USERNAME}_db' and user '${USERNAME}' created successfully."
