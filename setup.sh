@@ -326,12 +326,18 @@ EOF
     echo "=== Bonus Service Setup ==="
     echo "Now you can choose an optional service to install!"
     echo "Pick one of the following:"
+    echo "==== IMPORTANT ===="
+    echo
+    echo "THESE SCRIPTS HAVE NOT BEEN MADE BY ME!"
+    echo "I DID NOT VERIFY IF THEY STILL OR WILL WORK"
+    echo "PLEASE TEST ON A CLONE OF YOUR VIRTUAL MACHINE!!!"
+    echo
     echo "1) Netdata (System Monitoring)"
     echo "2) Jellyfin (Media Server)"
     echo "3) Vaultwarden (Password Manager)"
     echo "4) n8n (Automation Tool)"
-    echo "5) Nextcloud (Cloud Storage)"
-    echo "0) Skip this step"
+    echo "5) Filebrowser (Cloud Storage)"
+    echo "0) Skip this step or choose your own service"
 
     read -rp "Enter the number of your choice: " SERVICE_CHOICE
 
@@ -340,7 +346,7 @@ EOF
         2) SERVICE_NAME="jellyfin" ;;
         3) SERVICE_NAME="vaultwarden" ;;
         4) SERVICE_NAME="n8n" ;;
-        5) SERVICE_NAME="nextcloud" ;;
+        5) SERVICE_NAME="filebrowser" ;;
         0) SERVICE_NAME="none" ;;
         *) echo "Invalid choice, skipping."; SERVICE_NAME="none" ;;
     esac
