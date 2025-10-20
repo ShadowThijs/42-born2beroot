@@ -92,27 +92,57 @@ echo
 echo "=== User and Sudo Setup ==="
 apt install -y sudo
 
-# Ensure sudoers file backup
-cp /etc/sudoers /etc/sudoers.bak
+# Backup sudoers file
+cp /etc/sudoers /etc/sudoers.bak.$(date +%s)
 
-# Use a temp file to append custom defaults safely
-SUDO_TMP=$(mktemp)
-cat <<EOF >>"$SUDO_TMP"
-Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-Defaults requiretty
-Defaults badpass_message="WRONG PASSWORD"
-Defaults logfile="/var/log/sudo/sudo.log"
-Defaults log_input
-Defaults log_output
-Defaults iolog_dir=/var/log/sudo
-Defaults passwd_tries=3
-EOF
+SUDOERS_FILE="/etc/sudoers"
+TMP_SUDOERS=$(mktemp)
 
-# Merge safely with visudo check
-visudo -cf "$SUDO_TMP" && cat "$SUDO_TMP" >> /etc/sudoers
-rm "$SUDO_TMP"
+# Copy to temp file for editing
+cp "$SUDOERS_FILE" "$TMP_SUDOERS"
 
-# Create user group and add user
+# Replace secure_path line (commented or not)
+if grep -qE '^Defaults\s+secure_path=' "$TMP_SUDOERS"; then
+    sed -i 's|^Defaults\s\+secure_path=.*|Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"|' "$TMP_SUDOERS"
+else
+    # Add secure_path if missing
+    echo 'Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' >> "$TMP_SUDOERS"
+fi
+
+# Find the line number of secure_path
+LINE_NUM=$(grep -nE '^Defaults\s+secure_path=' "$TMP_SUDOERS" | head -n 1 | cut -d: -f1)
+
+# Insert the other Defaults settings right after secure_path line
+awk -v ln="$LINE_NUM" '
+NR == ln {
+    print
+    print "Defaults requiretty"
+    print "Defaults badpass_message=\"WRONG PASSWORD\""
+    print "Defaults logfile=\"/var/log/sudo/sudo.log\""
+    print "Defaults log_input"
+    print "Defaults log_output"
+    print "Defaults iolog_dir=/var/log/sudo"
+    print "Defaults passwd_tries=3"
+    next
+}
+{ print }
+' "$TMP_SUDOERS" > "${TMP_SUDOERS}.new"
+
+mv "${TMP_SUDOERS}.new" "$TMP_SUDOERS"
+
+# Validate the modified file before applying
+if visudo -cf "$TMP_SUDOERS"; then
+    cp "$TMP_SUDOERS" "$SUDOERS_FILE"
+    echo "Sudo configuration updated successfully."
+else
+    echo "Error: Invalid sudoers configuration. Restoring backup."
+    cp /etc/sudoers.bak.* "$SUDOERS_FILE"
+    exit 1
+fi
+
+rm "$TMP_SUDOERS"
+
+# --- User group setup ---
 groupadd -f user42
 usermod -aG user42,sudo "$USERNAME"
 
