@@ -192,23 +192,169 @@ passwd "$USERNAME"
 echo "Enter new root password:"
 passwd root
 
+# ==========================================================
+#  CRON JOB SETUP
+# ==========================================================
 echo
-echo "Retrieving monitoring.sh script from da goat Shadow :)"
-sleep 1
-wget https://raw.githubusercontent.com/ShadowThijs/42-born2beroot/refs/heads/main/monitoring.sh >/dev/null 2>&1
-echo "monitoring.sh grabbed from da goat Shadow"
-echo
-echo "Changing permissions and moving monitoring.sh"
-chmod +x monitoring.sh
-mv monitoring.sh /etc/cron.d/monitoring.sh
-CRONTAB_FILE="/var/spool/cron/crontabs/root"
-touch $CRONTAB_FILE
-echo "*/10 * * * * bash /etc/cron.d/monitoring.sh | wall" >> $CRONTAB_FILE
+echo "=== Setting up monitoring cron job ==="
 
-if $BONUS_SETUP; then
-	echo "=== BONUS setup starting ==="
-	echo
+# Download the script
+TMP_MONITOR="/tmp/monitoring.sh"
+echo "Retrieving monitoring.sh script from da goat Shadow :)"
+wget -q -O "$TMP_MONITOR" "https://raw.githubusercontent.com/ShadowThijs/42-born2beroot/refs/heads/main/monitoring.sh"
+
+# Move it to a safe location and set permissions
+install -m 755 "$TMP_MONITOR" /usr/local/bin/monitoring.sh
+echo "monitoring.sh installed to /usr/local/bin/monitoring.sh"
+rm -f "$TMP_MONITOR"
+
+# Verify crontab doesn't already contain the job
+CRON_JOB="*/10 * * * * /bin/bash /usr/local/bin/monitoring.sh | /usr/bin/wall"
+
+# Backup current crontab (if any)
+crontab -l -u root 2>/dev/null > /tmp/root_cron.bak || true
+
+# Add the job only if it's not already there
+if ! crontab -l 2>/dev/null | grep -Fq "/usr/local/bin/monitoring.sh"; then
+    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    echo "Cron job added successfully: $CRON_JOB"
+else
+    echo "Cron job already exists. Skipping."
 fi
+
+# Confirm cron job is installed
+echo
+echo "Current root crontab:"
+crontab -l
+
+# ==========================================================
+#  BONUS SECTION — WORDPRESS SETUP
+# ==========================================================
+if [ "$BONUS_SETUP" = true ]; then
+    echo
+    echo "=== BONUS SETUP: Installing and Configuring WordPress ==="
+    echo "Hold tight, we're setting up the web server, database, and PHP stack!"
+    echo
+
+    # --- Install required packages ---
+    echo "[1/5] Installing lighttpd web server..."
+    apt install -y lighttpd >/dev/null 2>&1
+
+    echo "[2/5] Installing MariaDB database server..."
+    apt install -y mariadb-server >/dev/null 2>&1
+
+    echo "[3/5] Installing PHP and required extensions..."
+    apt install -y php php-pdo php-mysql php-zip php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-opcache php-json php-cgi >/dev/null 2>&1
+
+    echo "[4/5] Enabling PHP support in lighttpd..."
+    lighttpd-enable-mod fastcgi fastcgi-php
+    systemctl restart lighttpd >/dev/null 2>&1
+
+    echo "[5/5] Updating firewall to allow HTTP traffic (port 80)..."
+    ufw allow http >/dev/null 2>&1
+    echo
+    echo "Web server and PHP modules installed successfully."
+    echo
+
+    # --- Set up MariaDB database ---
+    echo "=== Configuring MariaDB Database ==="
+    systemctl enable mariadb >/dev/null 2>&1
+    systemctl start mariadb >/dev/null 2>&1
+
+    # Generate a secure random password for the database user
+    DB_PASS="password"
+
+    echo "Creating WordPress database and user for '$USERNAME'..."
+    mariadb <<EOF
+CREATE DATABASE ${USERNAME}_db;
+CREATE USER '${USERNAME}'@'localhost' IDENTIFIED BY '${DB_PASS}';
+GRANT ALL PRIVILEGES ON ${USERNAME}_db.* TO '${USERNAME}'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+EOF
+
+    echo "Database '${USERNAME}_db' and user '${USERNAME}' created successfully."
+    echo "Database password: ${DB_PASS}"
+    echo
+
+    # --- Download and configure WordPress ---
+    echo "=== Setting up WordPress ==="
+    cd /var/www/html/ || exit 1
+    echo "Cleaning old files..."
+    rm -rf ./*
+
+    echo "Downloading latest WordPress..."
+    wget -q https://wordpress.org/latest.tar.gz >/dev/null 2>&1
+    tar xzf latest.tar.gz >/dev/null 2>&1
+    rm latest.tar.gz
+    mv wordpress/* .
+    rm -rf wordpress
+
+    echo "Setting correct permissions..."
+    chown -R www-data:www-data /var/www/html/
+
+    echo
+    echo "WordPress files deployed successfully!"
+    echo
+
+    # --- Final instructions for the user ---
+    echo "=========================================================="
+    echo "WordPress installation completed!"
+    echo
+    echo "Next steps:"
+    echo "1. Open VirtualBox settings for this VM."
+    echo "2. Under 'Network' → 'Advanced' → 'Port Forwarding', add a rule:"
+    echo "     Name: HTTP"
+    echo "     Host Port: 1672   (or any free port you prefer)"
+    echo "     Guest Port: 80"
+    echo
+    echo "Then, on your host machine, open your browser and go to:"
+    echo "		http://127.0.0.1:1672"
+    echo
+    echo "In the WordPress setup wizard:"
+    echo "	- Database Name: ${USERNAME}_db"
+    echo "	- Username: ${USERNAME}"
+    echo "	- Password: ${DB_PASS}"
+    echo "	- Database Host: localhost"
+    echo "	- Table Prefix: wp_ (default is fine)"
+    echo
+    echo "When prompted, create your WordPress admin account."
+    echo "You’ll then be able to access your site and admin dashboard."
+    echo
+    echo
+    echo
+    echo "=== Bonus Service Setup ==="
+    echo "Now you can choose an optional service to install!"
+    echo "Pick one of the following:"
+    echo "1) Netdata (System Monitoring)"
+    echo "2) Jellyfin (Media Server)"
+    echo "3) Vaultwarden (Password Manager)"
+    echo "4) n8n (Automation Tool)"
+    echo "5) Nextcloud (Cloud Storage)"
+    echo "0) Skip this step"
+
+    read -rp "Enter the number of your choice: " SERVICE_CHOICE
+
+    case "$SERVICE_CHOICE" in
+        1) SERVICE_NAME="netdata" ;;
+        2) SERVICE_NAME="jellyfin" ;;
+        3) SERVICE_NAME="vaultwarden" ;;
+        4) SERVICE_NAME="n8n" ;;
+        5) SERVICE_NAME="nextcloud" ;;
+        0) SERVICE_NAME="none" ;;
+        *) echo "Invalid choice, skipping."; SERVICE_NAME="none" ;;
+    esac
+
+    if [ "$SERVICE_NAME" != "none" ]; then
+        echo "Installing $SERVICE_NAME..."
+        wget -q "https://raw.githubusercontent.com/ShadowThijs/42-born2beroot/refs/heads/main/bonus/${SERVICE_NAME}.sh" -O /tmp/${SERVICE_NAME}.sh
+        chmod +x /tmp/${SERVICE_NAME}.sh
+        bash /tmp/${SERVICE_NAME}.sh
+    else
+        echo "Skipping bonus service setup."
+    fi
+fi
+
 
 echo
 echo "=== Setup Complete ==="
