@@ -11,8 +11,8 @@ MEM_USED=`free --mega | awk '/Mem:/ {printf "%.1f", $3/1048}'`
 MEM_TOTAL=`free --mega | awk '/Mem:/ {printf "%.1f", $2/1048}'`
 MEM_USED_PERC=`free | awk '/Mem:/ {printf "%.1f", $3 / $2 * 100'}`
 
-STORAGE_TOTAL=`df --total -h | tail -1 | awk '{print $2}' | grep -Eo '[0-9]{1,9}'`
-STORAGE_USED=`df --total -h | tail -1 | awk '{print $3}' | grep -Eo '[0-9]{1,9}'`
+STORAGE_TOTAL=`df --total -h | tail -1 | awk '{print $2}' | grep -Eo '[0-9.]{1,9}'`
+STORAGE_USED=`df --total -h | tail -1 | awk '{print $3}' | grep -Eo '[0-9.]{1,9}'`
 STORAGE_PERC=`df --total -h | tail -1 | awk '{print $5}'`
 
 # CPU Usage = (time spent working) / (total time) * 100
