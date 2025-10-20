@@ -35,6 +35,7 @@ done
 
 echo "Username: $USERNAME"
 echo "Bonus setup: $BONUS_SETUP"
+sleep 5
 echo
 
 # ==========================================================
@@ -55,7 +56,7 @@ if ! systemctl is-active --quiet ssh; then
 fi
 
 # Confirm SSH is running
-systemctl status ssh --no-pager
+systemctl status ssh --no-pager >/dev/null 2>&1
 
 # Configure sshd_config
 SSHD_CONFIG="/etc/ssh/sshd_config"
@@ -68,7 +69,7 @@ else
 fi
 
 # Restart and verify SSH
-systemctl restart ssh
+systemctl restart ssh >/dev/null 2>&1
 systemctl status ssh --no-pager | grep -E "Active:|port"
 
 echo "SSH configured on port 4242 with root login disabled."
@@ -78,19 +79,25 @@ echo
 #  FIREWALL CONFIGURATION
 # ==========================================================
 echo "=== Firewall Setup (ufw) ==="
-apt install -y ufw
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 4242
-ufw --force enable
-ufw status verbose
+echo "Installing ufw for firewall setup"
+apt install -y ufw >/dev/null 2>&1
+echo "ufw package installed"
+ufw default deny incoming >/dev/null 2>&1
+ufw default allow outgoing >/dev/null 2>&1
+ufw allow 4242 >/dev/null 2>&1
+echo "incoming and outgoing rules updated"
+ufw --force enable >/dev/null 2>&1
+ufw status verbose >/dev/null 2>&1
+echo "firewall has been enabled"
 echo
 
 # ==========================================================
 #  SUDO & USER GROUP CONFIGURATION
 # ==========================================================
 echo "=== User and Sudo Setup ==="
-apt install -y sudo
+echo "Installing sudo package"
+apt install -y sudo >/dev/null 2>&1
+echo "sudo package installed"
 
 # Backup sudoers file
 cp /etc/sudoers /etc/sudoers.bak.$(date +%s)
@@ -168,7 +175,9 @@ chage -M 30 root
 chage -m 2 root
 
 # Install password quality module
-apt install -y libpam-pwquality
+echo "Installing password quality checker"
+apt install -y libpam-pwquality >/dev/null 2>&1
+echo "Password quality checker installed"
 
 # Update common-password file
 PAM_FILE="/etc/pam.d/common-password"
@@ -181,8 +190,28 @@ fi
 echo
 echo "You must now change the passwords for both $USERNAME and root."
 echo "Use strong passwords — you won’t be able to change them again for 2 days."
+echo "Enter you new password:"
 passwd "$USERNAME"
+echo "Enter new root password:"
 passwd root
+
+echo
+echo "Retrieving monitoring.sh script from da goat Shadow :)"
+sleep 1
+wget https://raw.githubusercontent.com/ShadowThijs/42-born2beroot/refs/heads/main/monitoring.sh >/dev/null 2>&1
+echo "monitoring.sh grabbed from da goat Shadow"
+echo
+echo "Changing permissions and moving monitoring.sh"
+chmod +x monitoring.sh
+mv monitoring.sh /etc/cron.d/monitoring.sh
+CRONTAB_FILE="/var/spool/cron/crontabs/root"
+touch $CRONTAB_FILE
+echo "*/10 * * * * bash /etc/cron.d/monitoring.sh | wall" >> $CRONTAB_FILE
+
+if BONUS_SETUP; then
+	echo "=== BONUS setup starting ==="
+	echo
+fi
 
 echo
 echo "=== Setup Complete ==="
