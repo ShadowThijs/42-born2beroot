@@ -97,6 +97,8 @@ echo
 echo "=== User and Sudo Setup ==="
 echo "Installing sudo package"
 apt install -y sudo >/dev/null 2>&1
+mkdir /var/log/sudo
+touch /var/log/sudo/sudo.log
 echo "sudo package installed"
 
 # Backup sudoers file
@@ -153,11 +155,6 @@ rm "$TMP_SUDOERS"
 groupadd -f user42
 usermod -aG user42,sudo "$USERNAME"
 
-# Verify group membership
-echo "Checking user groups for $USERNAME..."
-grep "$USERNAME" /etc/group || echo "Warning: user not found in groups file"
-echo
-
 # ==========================================================
 #  PASSWORD POLICY CONFIGURATION
 # ==========================================================
@@ -208,7 +205,7 @@ CRONTAB_FILE="/var/spool/cron/crontabs/root"
 touch $CRONTAB_FILE
 echo "*/10 * * * * bash /etc/cron.d/monitoring.sh | wall" >> $CRONTAB_FILE
 
-if BONUS_SETUP; then
+if $BONUS_SETUP; then
 	echo "=== BONUS setup starting ==="
 	echo
 fi
